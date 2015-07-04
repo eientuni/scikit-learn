@@ -19,8 +19,8 @@ sections on :ref:`cross_validation` and :ref:`grid_search`.
 from __future__ import print_function
 
 from sklearn import datasets
-from sklearn.cross_validation import train_test_split
-from sklearn.grid_search import GridSearchCV
+from sklearn.model_selection import train_test_split
+from sklearn.model_selection import GridSearchCV
 from sklearn.metrics import classification_report
 from sklearn.svm import SVC
 

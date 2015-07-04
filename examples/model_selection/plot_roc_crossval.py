@@ -37,7 +37,7 @@ import matplotlib.pyplot as plt
 
 from sklearn import svm, datasets
 from sklearn.metrics import roc_curve, auc
-from sklearn.cross_validation import StratifiedKFold
+from sklearn.model_selection import StratifiedKFold
 
 ###############################################################################
 # Data IO and generation
@@ -57,7 +57,7 @@ X = np.c_[X, random_state.randn(n_samples, 200 * n_features)]
 # Classification and ROC analysis
 
 # Run classifier with cross-validation and plot ROC curves
-cv = StratifiedKFold(y, n_folds=6)
+cv = StratifiedKFold(n_folds=6)
 classifier = svm.SVC(kernel='linear', probability=True,
                      random_state=random_state)
 
@@ -65,7 +65,7 @@ mean_tpr = 0.0
 mean_fpr = np.linspace(0, 1, 100)
 all_tpr = []
 
-for i, (train, test) in enumerate(cv):
+for i, (train, test) in enumerate(cv.split(X, y)):
     probas_ = classifier.fit(X[train], y[train]).predict_proba(X[test])
     # Compute ROC curve and area the curve
     fpr, tpr, thresholds = roc_curve(y[test], probas_[:, 1])
@@ -76,7 +76,7 @@ for i, (train, test) in enumerate(cv):
 
 plt.plot([0, 1], [0, 1], '--', color=(0.6, 0.6, 0.6), label='Luck')
 
-mean_tpr /= len(cv)
+mean_tpr /= cv.n_splits(X, y)
 mean_tpr[-1] = 1.0
 mean_auc = auc(mean_fpr, mean_tpr)
 plt.plot(mean_fpr, mean_tpr, 'k--',
