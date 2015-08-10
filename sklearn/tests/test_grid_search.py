@@ -53,6 +53,14 @@ with warnings.catch_warnings():
 
 from sklearn.preprocessing import Imputer
 from sklearn.pipeline import Pipeline
+try:
+    # We should be able to import these Warnings from the old files too.
+    from sklearn.grid_search import ChangedBehaviorWarning
+    from sklearn.cross_validation import FitFailedWarning
+except ImportError:
+    raise AssertionError("The import of ChangedBehaviorWarning and/or "
+                         "FitFailedWarning from the old files, was not "
+                         "successful.")
 
 
 # Neither of the following two estimators inherit from BaseEstimator,
