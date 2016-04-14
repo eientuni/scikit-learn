@@ -561,7 +561,7 @@ class BaseSearchCV(six.with_metaclass(ABCMeta, BaseEstimator,
         n_fits = len(out)
 
         scores = list()
-        grid_scores = list()
+        search_scores = list()
         for grid_start in range(0, n_fits, n_splits):
             n_test_samples = 0
             score = 0
@@ -579,16 +579,16 @@ class BaseSearchCV(six.with_metaclass(ABCMeta, BaseEstimator,
                 score /= float(n_splits)
             scores.append((score, parameters))
             # TODO: shall we also store the test_fold_sizes?
-            grid_scores.append(_CVScoreTuple(
+            search_scores.append(_CVScoreTuple(
                 parameters,
                 score,
                 np.array(all_scores)))
         # Store the computed scores
-        self.grid_scores_ = grid_scores
+        self.search_scores_ = search_scores
 
         # Find the best parameters by comparing on the mean validation score:
         # note that `sorted` is deterministic in the way it breaks ties
-        best = sorted(grid_scores, key=lambda x: x.mean_validation_score,
+        best = sorted(search_scores, key=lambda x: x.mean_validation_score,
                       reverse=True)[0]
         self.best_params_ = best.parameters
         self.best_score_ = best.mean_validation_score
@@ -722,7 +722,7 @@ class GridSearchCV(BaseSearchCV):
 
     Attributes
     ----------
-    grid_scores_ : list of named tuples
+    search_scores_ : list of named tuples
         Contains scores for all parameter combinations in param_grid.
         Each entry corresponds to one parameter setting.
         Each named tuple has the attributes:
@@ -918,7 +918,7 @@ class RandomizedSearchCV(BaseSearchCV):
 
     Attributes
     ----------
-    grid_scores_ : list of named tuples
+    search_scores_ : list of named tuples
         Contains scores for all parameter combinations in param_grid.
         Each entry corresponds to one parameter setting.
         Each named tuple has the attributes:
