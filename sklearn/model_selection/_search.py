@@ -770,30 +770,36 @@ class GridSearchCV(BaseSearchCV):
 
         For instance the below given table
 
-        param_kernel|param_gamma|param_degree|test_split0_score|...|...rank...|
-        =======================================================================
-        'poly'      |      -    |      2     |        0.8      |...|    2     |
-        'poly'      |      -    |      3     |        0.7      |...|    4     |
-        'rbf'       |     0.1   |      -     |        0.8      |...|    3     |
-        'rbf'       |     0.2   |      -     |        0.9      |...|    1     |
+        +------------+-----------+------------+-----------------+---+---------+
+        |param_kernel|param_gamma|param_degree|test_split0_score|...|...rank..|
+        +============+===========+============+=================+===+=========+
+        |  'poly'    |     --    |      2     |        0.8      |...|    2    |
+        +------------+-----------+------------+-----------------+---+---------+
+        |  'poly'    |     --    |      3     |        0.7      |...|    4    |
+        +------------+-----------+------------+-----------------+---+---------+
+        |  'rbf'     |     0.1   |     --     |        0.8      |...|    3    |
+        +------------+-----------+------------+-----------------+---+---------+
+        |  'rbf'     |     0.2   |     --     |        0.9      |...|    1    |
+        +------------+-----------+------------+-----------------+---+---------+
 
-        will be represented by a results_ dict of :
+        will be represented by a ``results_`` dict of::
 
-        {'param_kernel' : masked_array(data = ['poly', 'poly', 'rbf', 'rbf'],
-                                       mask = [False False False False]...)
-         'param_gamma'  : masked_array(data = [-- -- 0.1 0.2],
-                                       mask = [ True  True False False]...),
-         'param_degree' : masked_array(data = [2.0 3.0 -- --],
-                                       mask = [False False  True  True]...),
-         'test_split0_score' : [0.8, 0.7, 0.8, 0.9],
-         'test_split1_score' : [0.82, 0.5, 0.7, 0.78],
-         'test_mean_score'   : [0.81, 0.60, 0.75, 0.82],
-         'test_std_score'    : [0.02, 0.01, 0.03, 0.03],
-         'test_rank_score'   : [2, 4, 3, 1],
-         'params'    : [{'kernel': 'poly', 'degree': 2}, ...],
-        }
+            {
+            'param_kernel': masked_array(data = ['poly', 'poly', 'rbf', 'rbf'],
+                                         mask = [False False False False]...)
+            'param_gamma': masked_array(data = [-- -- 0.1 0.2],
+                                        mask = [ True  True False False]...),
+            'param_degree': masked_array(data = [2.0 3.0 -- --],
+                                         mask = [False False  True  True]...),
+            'test_split0_score' : [0.8, 0.7, 0.8, 0.9],
+            'test_split1_score' : [0.82, 0.5, 0.7, 0.78],
+            'test_mean_score'   : [0.81, 0.60, 0.75, 0.82],
+            'test_std_score'    : [0.02, 0.01, 0.03, 0.03],
+            'test_rank_score'   : [2, 4, 3, 1],
+            'params'            : [{'kernel': 'poly', 'degree': 2}, ...],
+            }
 
-        NOTE that the key 'params' is used to store a list of parameter
+        NOTE that the key ``'params'`` is used to store a list of parameter
         settings dict for all the parameter candidates.
 
         NOTE that the standard deviation presented here might differ from
@@ -1004,26 +1010,31 @@ class RandomizedSearchCV(BaseSearchCV):
 
         For instance the below given table
 
-        param_kernel|param_gamma|test_split0_score|...|test_rank_score|
-        ===============================================================
-        'rbf'       |     0.1   |        0.8      |...|       2       |
-        'rbf'       |     0.2   |        0.9      |...|       1       |
-        'rbf'       |     0.3   |        0.7      |...|       1       |
+        +--------------+-------------+-------------------+---+---------------+
+        | param_kernel | param_gamma | test_split0_score |...|test_rank_score|
+        +==============+=============+===================+===+===============+
+        |    'rbf'     |     0.1     |        0.8        |...|       2       |
+        +--------------+-------------+-------------------+---+---------------+
+        |    'rbf'     |     0.2     |        0.9        |...|       1       |
+        +--------------+-------------+-------------------+---+---------------+
+        |    'rbf'     |     0.3     |        0.7        |...|       1       |
+        +--------------+-------------+-------------------+---+---------------+
 
-        will be represented by a results_ dict of :
+        will be represented by a ``results_`` dict of::
 
-        {'param_kernel' : masked_array(data = ['rbf', rbf', 'rbf'],
-                                       mask = False),
-         'param_gamma'  : masked_array(data = [0.1 0.2 0.3], mask = False),
-         'test_split0_score' : [0.8, 0.9, 0.7],
-         'test_split1_score' : [0.82, 0.5, 0.7],
-         'test_mean_score'   : [0.81, 0.7, 0.7],
-         'test_std_score'    : [0.02, 0.2, 0.],
-         'test_rank_score'   : [3, 1, 1],
-         'params' : [{'kernel' : 'rbf', 'gamma' : 0.1}, ...],
-        }
+            {
+            'param_kernel' : masked_array(data = ['rbf', rbf', 'rbf'],
+                                          mask = False),
+            'param_gamma'  : masked_array(data = [0.1 0.2 0.3], mask = False),
+            'test_split0_score' : [0.8, 0.9, 0.7],
+            'test_split1_score' : [0.82, 0.5, 0.7],
+            'test_mean_score'   : [0.81, 0.7, 0.7],
+            'test_std_score'    : [0.02, 0.2, 0.],
+            'test_rank_score'   : [3, 1, 1],
+            'params' : [{'kernel' : 'rbf', 'gamma' : 0.1}, ...],
+            }
 
-        NOTE that the key 'params' is used to store a list of parameter
+        NOTE that the key ``'params'`` is used to store a list of parameter
         settings dict for all the parameter candidates.
 
         NOTE that the standard deviation presented here might differ from
