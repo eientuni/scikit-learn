@@ -247,7 +247,8 @@ def test_grid_search_labels():
 
 
 def test_trivial_results_attr():
-    # Test search over a "grid" with only one point. (NRT for gh-1782)
+    # Test search over a "grid" with only one point.
+    # Non-regression test: grid_scores_ wouldn't be set by GridSearchCV.
     clf = MockClassifier()
     grid_search = GridSearchCV(clf, {'foo_param': [1]})
     grid_search.fit(X, y)
