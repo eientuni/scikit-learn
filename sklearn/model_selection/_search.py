@@ -524,10 +524,6 @@ class BaseSearchCV(six.with_metaclass(ABCMeta, BaseEstimator,
             print("Fitting {0} folds for each of {1} candidates, totalling"
                   " {2} fits".format(n_splits, n_candidates,
                                      n_candidates * n_splits))
-        candidate_params = list(parameter_iterable)
-        # Get all the unique parameters across all the candidates
-        parameter_names = sorted(set(chain(*map(six.iterkeys,
-                                                candidate_params))))
 
         base_estimator = clone(self.estimator)
         pre_dispatch = self.pre_dispatch
@@ -537,14 +533,15 @@ class BaseSearchCV(six.with_metaclass(ABCMeta, BaseEstimator,
             pre_dispatch=pre_dispatch
         )(delayed(_fit_and_score)(clone(base_estimator), X, y, self.scorer_,
                                   train, test, self.verbose, parameters,
-                                  self.fit_params, return_parameters=False,
+                                  self.fit_params, return_parameters=True,
                                   error_score=self.error_score)
-          for parameters in candidate_params
+          for parameters in parameter_iterable
           for train, test in cv.split(X, y, labels))
 
-        n_candidates = len(candidate_params)
+        test_scores, test_sample_counts, _, parameters = zip(*out)
 
-        test_scores, test_sample_counts, _ = zip(*out)
+        candidate_params = parameters[::n_splits]
+        n_candidates = len(candidate_params)
 
         test_scores = np.array(test_scores,
                                dtype=np.float64).reshape(n_candidates,
@@ -571,6 +568,9 @@ class BaseSearchCV(six.with_metaclass(ABCMeta, BaseEstimator,
         best_parameters = candidate_params[best_index]
         results["test_rank_score"] = ranks
 
+        # Get all the unique parameters across all the candidates
+        parameter_names = sorted(set(chain(*map(six.iterkeys,
+                                                candidate_params))))
         for param in parameter_names:
             # One np.MaskedArray of dtype object per parameter, mask all the
             # places where the param is not applicable for that candidate.
