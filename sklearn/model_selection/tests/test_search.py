@@ -11,7 +11,6 @@ import numpy as np
 import scipy.sparse as sp
 
 from sklearn.utils.fixes import in1d
-from sklearn.utils.fixes import rankdata
 from sklearn.utils.fixes import sp_version
 from sklearn.utils.testing import assert_equal
 from sklearn.utils.testing import assert_not_equal
@@ -20,6 +19,7 @@ from sklearn.utils.testing import assert_warns
 from sklearn.utils.testing import assert_raise_message
 from sklearn.utils.testing import assert_false, assert_true
 from sklearn.utils.testing import assert_array_equal
+from sklearn.utils.testing import assert_array_almost_equal
 from sklearn.utils.testing import assert_almost_equal
 from sklearn.utils.testing import ignore_warnings
 from sklearn.utils.mocking import CheckingClassifier, MockDataFrame
@@ -574,46 +574,14 @@ def check_results_keys(results, param_keys, score_keys, n_cand):
                     for key in param_keys + score_keys))
 
 
-def check_search_statistics(search, cv_iter, n_folds):
-    # SVC is a classifier, StratifiedKFold is used implicitly
+def check_results_grid_scores_consistency(search):
+    # TODO Remove in 0.20
     results = search.results_
-    iid = search.iid
-    test_sample_counts = ([len(test) for (_, test) in cv_iter]
-                          if iid else None)
-
     res_scores = np.vstack([results["test_split%d_score" % i]
-                            for i in range(n_folds)]).T
+                            for i in range(search.n_splits_)]).T
     res_means = results["test_mean_score"]
     res_stds = results["test_std_score"]
-    res_ranks = results["test_rank_score"]
     res_params = results["params"]
-    assert_equal(iid, (test_sample_counts is not None))
-    means = np.average(res_scores, axis=1, weights=test_sample_counts)
-    stds = np.sqrt(np.average((res_scores - means[:, np.newaxis]) ** 2,
-                              axis=1, weights=test_sample_counts))
-    assert_array_equal(res_means, means)
-    assert_array_equal(res_stds, stds)
-
-    ranks = rankdata(-means, method='min')
-    best_index = np.flatnonzero(ranks == 1)[0]
-
-    # Check the best result
-    best_score = res_means[best_index]
-
-    assert_array_equal(res_ranks, ranks)
-    assert_equal(search.best_index_, best_index)
-    assert_equal(search.best_score_, best_score)
-    assert_equal(search.best_params_, res_params[best_index])
-
-    # TODO Remove in 0.20
-    check_results_grid_scores_param_consistency(search, res_scores, res_means,
-                                                res_stds)
-
-
-def check_results_grid_scores_param_consistency(search, res_scores, res_means,
-                                                res_stds):
-    # TODO Remove in 0.20
-    res_params = search.results_['params']
     n_cand = len(res_params)
     grid_scores = assert_warns(DeprecationWarning, getattr,
                                search, 'grid_scores_')
@@ -629,14 +597,12 @@ def check_results_grid_scores_param_consistency(search, res_scores, res_means,
 
 
 def test_grid_search_results():
-    # Make a dataset with a lot of noise to get various kind of prediction
-    # errors across CV folds and parameter settings
-    X, y = make_classification(n_samples=200, n_features=100, n_informative=3,
-                               random_state=0)
+    X, y = make_classification(n_samples=50, n_features=4,
+                               random_state=42)
 
     n_folds = 3
     n_grid_points = 6
-    params = [dict(kernel=['rbf', ], C=[0.01, 0.1], gamma=[0.1, 1]),
+    params = [dict(kernel=['rbf', ], C=[1, 10], gamma=[0.1, 1]),
               dict(kernel=['poly', ], degree=[1, 2])]
     grid_search = GridSearchCV(SVC(), cv=n_folds, iid=False,
                                param_grid=params)
@@ -653,26 +619,24 @@ def test_grid_search_results():
 
     for search, iid in zip((grid_search, grid_search_iid), (False, True)):
         assert_equal(iid, search.iid)
-
         results = search.results_
-        cv_iter = StratifiedKFold(n_folds).split(X, y)
-
+        # Check results structure
         check_results_array_types(results, param_keys, score_keys)
         check_results_keys(results, param_keys, score_keys, n_candidates)
-        check_search_statistics(search, cv_iter, n_folds)
-
-    results = grid_search.results_
-    n_candidates = len(grid_search.results_['params'])
-    assert_true(all((results['param_C'].mask[i] and
-                     results['param_gamma'].mask[i] and
-                     not results['param_degree'].mask[i])
-                    for i in range(n_candidates)
-                    if results['param_kernel'][i] == 'linear'))
-    assert_true(all((not results['param_C'].mask[i] and
-                     not results['param_gamma'].mask[i] and
-                     results['param_degree'].mask[i])
-                    for i in range(n_candidates)
-                    if results['param_kernel'][i] == 'rbf'))
+        # Check masking
+        results = grid_search.results_
+        n_candidates = len(grid_search.results_['params'])
+        assert_true(all((results['param_C'].mask[i] and
+                         results['param_gamma'].mask[i] and
+                         not results['param_degree'].mask[i])
+                        for i in range(n_candidates)
+                        if results['param_kernel'][i] == 'linear'))
+        assert_true(all((not results['param_C'].mask[i] and
+                         not results['param_gamma'].mask[i] and
+                         results['param_degree'].mask[i])
+                        for i in range(n_candidates)
+                        if results['param_kernel'][i] == 'rbf'))
+        check_results_grid_scores_consistency(search)
 
 
 def test_random_search_results():
@@ -701,21 +665,100 @@ def test_random_search_results():
                   'test_split2_score', 'test_std_score')
     n_cand = n_search_iter
 
-    # Common tests
     for search, iid in zip((random_search, random_search_iid), (False, True)):
         assert_equal(iid, search.iid)
-
         results = search.results_
-        cv_iter = StratifiedKFold(n_folds).split(X, y)
-
+        # Check results structure
         check_results_array_types(results, param_keys, score_keys)
         check_results_keys(results, param_keys, score_keys, n_cand)
-        check_search_statistics(search, cv_iter, n_folds)
+        # For random_search, all the param array vals should be unmasked
+        assert_false(any(results['param_C'].mask) or
+                     any(results['param_gamma'].mask))
+        check_results_grid_scores_consistency(search)
 
-    # For random_search, all the param array vals should be unmasked
-    results = random_search.results_
-    assert_false(any(results['param_C'].mask) or
-                 any(results['param_gamma'].mask))
+
+def test_search_iid_param():
+    # Test the IID parameter
+    # noise-free simple 2d-data
+    X, y = make_blobs(centers=[[0, 0], [1, 0], [0, 1], [1, 1]], random_state=0,
+                      cluster_std=0.1, shuffle=False, n_samples=80)
+    # split dataset into two folds that are not iid
+    # first one contains data of all 4 blobs, second only from two.
+    mask = np.ones(X.shape[0], dtype=np.bool)
+    mask[np.where(y == 1)[0][::2]] = 0
+    mask[np.where(y == 2)[0][::2]] = 0
+    # this leads to perfect classification on one fold and a score of 1/3 on
+    # the other
+    # create "cv" for splits
+    cv = [[mask, ~mask], [~mask, mask]]
+    # once with iid=True (default)
+    grid_search = GridSearchCV(SVC(), param_grid={'C': [1, 10]}, cv=cv)
+    random_search = RandomizedSearchCV(SVC(), n_iter=2,
+                                       param_distributions={'C': [1, 10]},
+                                       cv=cv)
+    for search in (grid_search, random_search):
+        search.fit(X, y)
+        assert_true(search.iid)
+
+        # Test the first candidate
+        cv_scores, mean, std = search._get_candidate_scores(0)
+        assert_equal(search.results_['param_C'][0], 1)
+        assert_array_almost_equal(cv_scores, [1, 1. / 3.])
+        # for first split, 1/4 of dataset is in test, for second 3/4.
+        # take weighted average and weighted std
+        expected_mean = 1 * 1. / 4. + 1. / 3. * 3. / 4.
+        expected_std = np.sqrt(1. / 4 * (expected_mean - 1) ** 2 +
+                               3. / 4 * (expected_mean - 1. / 3.) ** 2)
+        assert_almost_equal(mean, expected_mean)
+        assert_almost_equal(std, expected_std)
+
+    # once with iid=False
+    grid_search = GridSearchCV(SVC(),
+                               param_grid={'C': [1, 10]},
+                               cv=cv, iid=False)
+    random_search = RandomizedSearchCV(SVC(), n_iter=2,
+                                       param_distributions={'C': [1, 10]},
+                                       cv=cv, iid=False)
+
+    for search in (grid_search, random_search):
+        search.fit(X, y)
+        assert_false(search.iid)
+
+        cv_scores, mean, std = search._get_candidate_scores(0)
+        assert_equal(search.results_['param_C'][0], 1)
+        # scores are the same as above
+        assert_array_almost_equal(cv_scores, [1, 1. / 3.])
+        # Unweighted mean/std is used
+        assert_almost_equal(mean, np.mean(cv_scores))
+        assert_almost_equal(std, np.std(cv_scores))
+
+
+def test_search_results_rank_tie_breaking():
+    X, y = make_blobs(n_samples=50)
+
+    # The two C values are close enough to give similar models
+    # which would result in a tie of their mean cv-scores
+    param_grid = {'C': [1, 1.001, 0.001]}
+
+    grid_search = GridSearchCV(SVC(), param_grid=param_grid)
+    random_search = RandomizedSearchCV(SVC(), n_iter=3,
+                                       param_distributions=param_grid)
+
+    for search in (grid_search, random_search):
+        search.fit(X, y)
+        results = search.results_
+        # Check tie breaking strategy -
+        # Check that there is a tie in the mean scores btw
+        # candidates 1 and 2 alone
+        assert_almost_equal(results['test_mean_score'][0],
+                            results['test_mean_score'][1])
+        try:
+            assert_almost_equal(results['test_mean_score'][1],
+                                results['test_mean_score'][2])
+        except AssertionError:
+            pass
+        # 'min' rank should be assigned to the tied candidates
+        assert_almost_equal(search.results_['test_rank_score'], [1, 1, 3])
 
 
 def test_search_results_none_param():
