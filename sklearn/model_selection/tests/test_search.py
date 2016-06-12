@@ -606,10 +606,12 @@ def check_search_statistics(search, cv_iter, n_folds):
     assert_equal(search.best_params_, res_params[best_index])
 
     # TODO Remove in 0.20
-    check_results_grid_scores_param_consistency(search, res_scores, res_means)
+    check_results_grid_scores_param_consistency(search, res_scores, res_means,
+                                                res_stds)
 
 
-def check_results_grid_scores_param_consistency(search, res_scores, res_means):
+def check_results_grid_scores_param_consistency(search, res_scores, res_means,
+                                                res_stds):
     # TODO Remove in 0.20
     res_params = search.results_['params']
     n_cand = len(res_params)
@@ -623,6 +625,7 @@ def check_results_grid_scores_param_consistency(search, res_scores, res_means):
         assert_array_equal(grid_scores[i].cv_validation_scores,
                            res_scores[i, :])
         assert_array_equal(grid_scores[i].mean_validation_score, res_means[i])
+        assert_array_equal(grid_scores[i].corrected_std, res_stds[i])
 
 
 def test_grid_search_results():

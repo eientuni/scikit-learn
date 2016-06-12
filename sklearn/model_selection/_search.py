@@ -344,7 +344,8 @@ def _check_param_grid(param_grid):
 class _CVScoreTuple (namedtuple('_CVScoreTuple',
                                 ('parameters',
                                  'mean_validation_score',
-                                 'cv_validation_scores'))):
+                                 'cv_validation_scores',
+                                 'corrected_std'))):
     # A raw namedtuple is very memory efficient as it packs the attributes
     # in a struct to get rid of the __dict__ of attributes in particular it
     # does not copy the string for the keys on each instance.
@@ -359,7 +360,7 @@ class _CVScoreTuple (namedtuple('_CVScoreTuple',
         """Simple custom repr to summarize the main info"""
         return "mean: {0:.5f}, std: {1:.5f}, params: {2}".format(
             self.mean_validation_score,
-            np.std(self.cv_validation_scores),
+            self.corrected_std,
             self.parameters)
 
 
@@ -638,8 +639,8 @@ class BaseSearchCV(six.with_metaclass(ABCMeta, BaseEstimator,
         grid_scores = list()
 
         for index, params in enumerate(self.results_['params']):
-            scores, mean, _ = self._get_candidate_scores(index)
-            grid_scores.append(_CVScoreTuple(params, mean, scores))
+            scores, mean, std = self._get_candidate_scores(index)
+            grid_scores.append(_CVScoreTuple(params, mean, scores, std))
 
         return grid_scores
 
@@ -801,12 +802,6 @@ class GridSearchCV(BaseSearchCV):
 
         NOTE that the key ``'params'`` is used to store a list of parameter
         settings dict for all the parameter candidates.
-
-        NOTE that the standard deviation presented here might differ from
-        the one presented at ``grid_scores_`` when ``iid`` is ``True`` as
-        ``grid_scores_`` presents the std without weighing them for both the
-        cases of ``iid=True`` and ``iid=False`` wheareas here the
-        std is weighted by the test sample counts when ``iid`` is ``True``.
 
     best_estimator_ : estimator
         Estimator that was chosen by the search, i.e. estimator
@@ -1036,12 +1031,6 @@ class RandomizedSearchCV(BaseSearchCV):
 
         NOTE that the key ``'params'`` is used to store a list of parameter
         settings dict for all the parameter candidates.
-
-        NOTE that the standard deviation presented here might differ from
-        the one presented at ``grid_scores_`` when ``iid`` is ``True`` as
-        ``grid_scores_`` presents the std without weighing them for both the
-        cases of ``iid=True`` and ``iid=False`` wheareas here the
-        std is weighted by the test sample counts when ``iid`` is ``True``.
 
     best_estimator_ : estimator
         Estimator that was chosen by the search, i.e. estimator
