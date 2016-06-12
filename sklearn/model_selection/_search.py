@@ -767,7 +767,7 @@ class GridSearchCV(BaseSearchCV):
     ----------
     results_ : dict of numpy (masked) ndarrays
         A dict with keys as column headers and values as columns, that can be
-        imported into a pandas DataFrame.
+        imported into a pandas ``DataFrame``.
 
         For instance the below given table
 
@@ -1001,7 +1001,7 @@ class RandomizedSearchCV(BaseSearchCV):
     ----------
     results_ : dict of numpy (masked) ndarrays
         A dict with keys as column headers and values as columns, that can be
-        imported into a pandas DataFrame.
+        imported into a pandas ``DataFrame``.
 
         For instance the below given table
 
