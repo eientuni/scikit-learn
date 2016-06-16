@@ -511,7 +511,34 @@ class BaseSearchCV(six.with_metaclass(ABCMeta, BaseEstimator,
 
         estimator = self.estimator
         cv = check_cv(self.cv, y, classifier=is_classifier(estimator))
-        self.scorer_ = check_scoring(self.estimator, scoring=self.scoring)
+
+        if isinstance(self.scoring, (list, tuple)):
+            self._multiple_metric = True
+            self._scorer_names = sorted(self.scoring)
+            for scorer_name, count in zip(*np.unique(self._scorer_names,
+                                                     return_counts=True)):
+                if not isinstance(scorer_name, six.string_types):
+                    raise ValueError("The scoring, %r, is not of string type."
+                                     " To specify a callable as the scorer,"
+                                     " use a dict with unique scorer names as"
+                                     " keys and the callables as their values."
+                                     % scorer_name)
+                if count != 1:
+                    raise ValueError("The scoring %s is repeated %d times."
+                                     % (scorer_name, count))
+            self._scorers = self._scorer_names
+        elif isinstance(self.scoring, dict):
+            self._multiple_metric = True
+            self._scorer_names = sorted(six.iterkeys(self._scorer_names))
+            self._scorers = (self.scoring.get(k) for k in self._scorer_names)
+        else:
+            self._multiple_metric = False
+            self._scorer_names = ['score']
+            self._scorers = ['score']
+
+        self._scorer_names = tuple(self._scorer_names)
+        self._scorers = tuple(map(partial(check_scoring, self.estimator),
+                                  self._scorers))
 
         n_samples = _num_samples(X)
         X, y, labels = indexable(X, y, labels)

@@ -185,7 +185,7 @@ def _fit_and_score(estimator, X, y, scorer, train, test, verbose,
         The target variable to try to predict in the case of
         supervised learning.
 
-    scorer : callable
+    scorer : A list of callables
         A scorer callable object / function with signature
         ``scorer(estimator, X, y)``.
 
@@ -218,17 +218,23 @@ def _fit_and_score(estimator, X, y, scorer, train, test, verbose,
 
     Returns
     -------
-    train_score : float, optional
-        Score on training set, returned only if `return_train_score` is `True`.
+    train_score : list of floats, optional
+        A list of training set scores for all the callable scorer.
 
-    test_score : float
-        Score on test set.
+    test_score : list of floats
+        A list of testing set scores for all the callable scorer.
 
     n_test_samples : int
         Number of test samples.
 
-    scoring_time : float
-        Time spent for fitting and scoring in seconds.
+    fitting_time : float
+        Time spent for fitting the estimator.
+
+        NOTE that this is inclusive of the time spent on splitting the data
+        into train and test splits.
+
+    scoring_time : list of floats
+        A list of scoring times for all the callable scorers.
 
     parameters : dict or None, optional
         The parameters that have been evaluated.
@@ -259,7 +265,7 @@ def _fit_and_score(estimator, X, y, scorer, train, test, verbose,
             estimator.fit(X_train, **fit_params)
         else:
             estimator.fit(X_train, y_train, **fit_params)
-
+        fitting_time = time.time() - start_time
     except Exception as e:
         if error_score == 'raise':
             raise
@@ -274,13 +280,16 @@ def _fit_and_score(estimator, X, y, scorer, train, test, verbose,
             raise ValueError("error_score must be the string 'raise' or a"
                              " numeric value. (Hint: if using 'raise', please"
                              " make sure that it has been spelled correctly.)")
-
     else:
-        test_score = _score(estimator, X_test, y_test, scorer)
-        if return_train_score:
-            train_score = _score(estimator, X_train, y_train, scorer)
-
-    scoring_time = time.time() - start_time
+        test_scores = []
+        train_scores = []
+        scoring_times = []
+        for scorer in scorers:
+            start_time = time.time()
+            test_score = _score(estimator, X_test, y_test, scorer)
+            if return_train_score:
+                train_score = _score(estimator, X_train, y_train, scorer)
+            scoring_times.append(time.time() - start_time)
 
     if verbose > 2:
         msg += ", score=%f" % test_score
@@ -288,8 +297,9 @@ def _fit_and_score(estimator, X, y, scorer, train, test, verbose,
         end_msg = "%s -%s" % (msg, logger.short_format_time(scoring_time))
         print("[CV] %s %s" % ((64 - len(end_msg)) * '.', end_msg))
 
-    ret = [train_score] if return_train_score else []
-    ret.extend([test_score, _num_samples(X_test), scoring_time])
+    ret = [train_scores] if return_train_score else []
+    ret.extend([test_scores, _num_samples(X_test),
+                fitting_time, scoring_times])
     if return_parameters:
         ret.append(parameters)
     return ret
