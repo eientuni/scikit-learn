@@ -713,15 +713,7 @@ class SGDClassifier(BaseSGDClassifier, _LearntSelectorMixin):
             power_t=power_t, class_weight=class_weight, warm_start=warm_start,
             average=average)
 
-    def _check_proba(self):
-        check_is_fitted(self, "t_")
-
-        if self.loss not in ("log", "modified_huber"):
-            raise AttributeError("probability estimates are not available for"
-                                 " loss=%r" % self.loss)
-
-    @property
-    def predict_proba(self):
+    def predict_proba(self, X):
         """Probability estimates.
 
         This method is only available for log loss and modified Huber loss.
@@ -753,10 +745,11 @@ class SGDClassifier(BaseSGDClassifier, _LearntSelectorMixin):
         case is in the appendix B in:
         http://jmlr.csail.mit.edu/papers/volume2/zhang02c/zhang02c.pdf
         """
-        self._check_proba()
-        return self._predict_proba
+        check_is_fitted(self, "t_")
 
-    def _predict_proba(self, X):
+        if self.loss not in ("log", "modified_huber"):
+            raise AttributeError("probability estimates are not available for"
+                                 " loss=%r" % self.loss)
         if self.loss == "log":
             return self._predict_proba_lr(X)
 
@@ -797,8 +790,7 @@ class SGDClassifier(BaseSGDClassifier, _LearntSelectorMixin):
                                       " loss='log' or loss='modified_huber' "
                                       "(%r given)" % self.loss)
 
-    @property
-    def predict_log_proba(self):
+    def predict_log_proba(self, X):
         """Log of probability estimates.
 
         This method is only available for log loss and modified Huber loss.
@@ -819,10 +811,11 @@ class SGDClassifier(BaseSGDClassifier, _LearntSelectorMixin):
             model, where classes are ordered as they are in
             `self.classes_`.
         """
-        self._check_proba()
-        return self._predict_log_proba
+        check_is_fitted(self, "t_")
 
-    def _predict_log_proba(self, X):
+        if self.loss not in ("log", "modified_huber"):
+            raise AttributeError("probability estimates are not available for"
+                                 " loss=%r" % self.loss)
         return np.log(self.predict_proba(X))
 
 
