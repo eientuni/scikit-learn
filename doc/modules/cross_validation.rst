@@ -210,6 +210,12 @@ that can be used to generate dataset splits according to different cross
 validation strategies.
 
 
+Cross-validators for IID data
+=============================
+
+<TODO> Note on IID data, Note on why we use these splitters
+
+
 K-fold
 ------
 
@@ -259,36 +265,6 @@ two slightly unbalanced classes::
   [2 3 6 7 8 9] [0 1 4 5]
   [0 1 3 4 5 8 9] [2 6 7]
   [0 1 2 4 5 6 7] [3 8 9]
-
-
-Label k-fold
-------------
-
-:class:`LabelKFold` is a variation of *k-fold* which ensures that the same
-label is not in both testing and training sets. This is necessary for example
-if you obtained data from different subjects and you want to avoid over-fitting
-(i.e., learning person specific features) by testing and training on different
-subjects.
-
-Imagine you have three subjects, each with an associated number from 1 to 3::
-
-  >>> from sklearn.model_selection import LabelKFold
-
-  >>> X = [0.1, 0.2, 2.2, 2.4, 2.3, 4.55, 5.8, 8.8, 9, 10]
-  >>> y = ["a", "b", "b", "b", "c", "c", "c", "d", "d", "d"]
-  >>> labels = [1, 1, 1, 2, 2, 2, 3, 3, 3, 3]
-
-  >>> lkf = LabelKFold(n_splits=3)
-  >>> for train, test in lkf.split(X, y, labels):
-  ...     print("%s %s" % (train, test))
-  [0 1 2 3 4 5] [6 7 8 9]
-  [0 1 2 6 7 8 9] [3 4 5]
-  [3 4 5 6 7 8 9] [0 1 2]
-
-Each subject is in a different testing fold, and the same subject is never in
-both testing and training. Notice that the folds do not have exactly the same
-size due to the imbalance in the data.
-
 
 Leave-One-Out - LOO
 -------------------
@@ -373,6 +349,92 @@ Example of Leave-2-Out on a dataset with 4 samples::
   [0 1] [2 3]
 
 
+.. _ShuffleSplit:
+
+Random permutations cross-validation a.k.a. Shuffle & Split
+-----------------------------------------------------------
+
+:class:`ShuffleSplit`
+
+The :class:`ShuffleSplit` iterator will generate a user defined number of
+independent train / test dataset splits. Samples are first shuffled and
+then split into a pair of train and test sets.
+
+It is possible to control the randomness for reproducibility of the
+results by explicitly seeding the ``random_state`` pseudo random number
+generator.
+
+Here is a usage example::
+
+  >>> from sklearn.model_selection import ShuffleSplit
+  >>> X = np.arange(5)
+  >>> ss = ShuffleSplit(n_splits=3, test_size=0.25,
+  ...     random_state=0)
+  >>> for train_index, test_index in ss.split(X):
+  ...     print("%s %s" % (train_index, test_index))
+  ...
+  [1 3 4] [2 0]
+  [1 4 3] [0 2]
+  [4 0 2] [1 3]
+
+:class:`ShuffleSplit` is thus a good alternative to :class:`KFold` cross
+validation that allows a finer control on the number of iterations and
+the proportion of samples on each side of the train / test split.
+
+
+Predefined Fold-Splits / Validation-Sets
+----------------------------------------
+
+For some datasets, a pre-defined split of the data into training- and
+validation fold or into several cross-validation folds already
+exists. Using :class:`PredefinedSplit` it is possible to use these folds
+e.g. when searching for hyperparameters.
+
+For example, when using a validation set, set the ``test_fold`` to 0 for all
+samples that are part of the validation set, and to -1 for all other samples.
+
+
+See also
+--------
+:class:`StratifiedShuffleSplit` is a variation of *ShuffleSplit*, which returns
+stratified splits, *i.e* which creates splits by preserving the same
+percentage for each target class as in the complete set.
+
+Cross-validators for grouped data
+=================================
+
+<TODO> Note on grouped data. Note on domain grouping. Note on why we use these
+<TODO> splitters
+
+Label k-fold
+------------
+
+:class:`LabelKFold` is a variation of *k-fold* which ensures that the same
+label is not in both testing and training sets. This is necessary for example
+if you obtained data from different subjects and you want to avoid over-fitting
+(i.e., learning person specific features) by testing and training on different
+subjects.
+
+Imagine you have three subjects, each with an associated number from 1 to 3::
+
+  >>> from sklearn.model_selection import LabelKFold
+
+  >>> X = [0.1, 0.2, 2.2, 2.4, 2.3, 4.55, 5.8, 8.8, 9, 10]
+  >>> y = ["a", "b", "b", "b", "c", "c", "c", "d", "d", "d"]
+  >>> labels = [1, 1, 1, 2, 2, 2, 3, 3, 3, 3]
+
+  >>> lkf = LabelKFold(n_splits=3)
+  >>> for train, test in lkf.split(X, y, labels):
+  ...     print("%s %s" % (train, test))
+  [0 1 2 3 4 5] [6 7 8 9]
+  [0 1 2 6 7 8 9] [3 4 5]
+  [3 4 5 6 7 8 9] [0 1 2]
+
+Each subject is in a different testing fold, and the same subject is never in
+both testing and training. Notice that the folds do not have exactly the same
+size due to the imbalance in the data.
+
+
 Leave-One-Label-Out - LOLO
 --------------------------
 
@@ -435,39 +497,6 @@ Example of Leave-2-Label Out::
   [2 3] [0 1 4 5]
   [0 1] [2 3 4 5]
 
-.. _ShuffleSplit:
-
-Random permutations cross-validation a.k.a. Shuffle & Split
------------------------------------------------------------
-
-:class:`ShuffleSplit`
-
-The :class:`ShuffleSplit` iterator will generate a user defined number of
-independent train / test dataset splits. Samples are first shuffled and
-then split into a pair of train and test sets.
-
-It is possible to control the randomness for reproducibility of the
-results by explicitly seeding the ``random_state`` pseudo random number
-generator.
-
-Here is a usage example::
-
-  >>> from sklearn.model_selection import ShuffleSplit
-  >>> X = np.arange(5)
-  >>> ss = ShuffleSplit(n_splits=3, test_size=0.25,
-  ...     random_state=0)
-  >>> for train_index, test_index in ss.split(X):
-  ...     print("%s %s" % (train_index, test_index))
-  ...
-  [1 3 4] [2 0]
-  [1 4 3] [0 2]
-  [4 0 2] [1 3]
-
-:class:`ShuffleSplit` is thus a good alternative to :class:`KFold` cross
-validation that allows a finer control on the number of iterations and
-the proportion of samples on each side of the train / test split.
-
-
 Label-Shuffle-Split
 -------------------
 
@@ -503,23 +532,6 @@ generated by :class:`LeavePLabelsOut`.
 
 
 
-Predefined Fold-Splits / Validation-Sets
-----------------------------------------
-
-For some datasets, a pre-defined split of the data into training- and
-validation fold or into several cross-validation folds already
-exists. Using :class:`PredefinedSplit` it is possible to use these folds
-e.g. when searching for hyperparameters.
-
-For example, when using a validation set, set the ``test_fold`` to 0 for all
-samples that are part of the validation set, and to -1 for all other samples.
-
-
-See also
---------
-:class:`StratifiedShuffleSplit` is a variation of *ShuffleSplit*, which returns
-stratified splits, *i.e* which creates splits by preserving the same
-percentage for each target class as in the complete set.
 
 A note on shuffling
 ===================
