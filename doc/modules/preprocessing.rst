@@ -459,6 +459,16 @@ that contain the missing values::
     [[ 4.          2.        ]
      [ 6.          3.666...]
      [ 7.          6.        ]]
+    >>> imp_with_in = Imputer(missing_values='NaN', strategy='mean', axis=0,add_indicator_features=True)
+    >>> imp_with_in.fit([[1, 2], [np.nan, 3], [7, 6]])
+    Imputer(add_indicator_features=True, axis=0, copy=True, missing_values='NaN',
+        strategy='mean', verbose=0)
+    >>> print(imp_with_in.transform(X))                           # doctest: +ELLIPSIS
+    [[ 4.          2.          1.        ]
+     [ 6.          3.66666667  0.        ]
+     [ 7.          6.          0.        ]]
+    >>> print(imp_with_in.imputed_features_)
+    [0]
 
 The :class:`Imputer` class also supports sparse matrices::
 
