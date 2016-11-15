@@ -759,6 +759,21 @@ Model evaluation and meta-estimators
      the parameter ``n_labels`` is renamed to ``n_groups``.
      :issue:`6660` by `Raghav R V`_.
 
+Other Miscelaneous API changes
+
+   - The custom exceptions and warning classes,
+     ``base.ChangedBehaviorWarning``, ``cross_validation.FitFailedWarning``,
+     ``base.UndefinedMetricWarning``, ``neighbors.base.NeighborsWarning``,
+     ``utils.ConvergenceWarning``, ``utils.DataDimensionalityWarning``,
+     ``utils.validation.NonBLASDotWarning``,
+     ``utils.validation.NotFittedError`` and
+     ``utils.validation.DataConversionWarning`` are moved into
+     :mod:`sklearn.exceptions`.
+     Additionally :class`sklearn.exceptions.EfficiencyWarning` was added
+     and used to subclass the moved
+     :class:`sklearn.exceptions.NonBLASDotWarning`.
+     :issue:`4826` by `Raghav RV`_
+
 Code Contributors
 -----------------
 Aditya Joshi, Alejandro, Alexander Fabisch, Alexander Loginov, Alexander
