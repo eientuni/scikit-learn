@@ -128,7 +128,6 @@ def cross_val_score(estimator, X, y=None, groups=None, scoring=None, cv=None,
     X, y, groups = indexable(X, y, groups)
 
     cv = check_cv(cv, y, classifier=is_classifier(estimator))
-    cv_iter = list(cv.split(X, y, groups))
     scorer = check_scoring(estimator, scoring=scoring)
     # We clone the estimator to make sure that all the folds are
     # independent, and that it is pickle-able.
@@ -137,7 +136,7 @@ def cross_val_score(estimator, X, y=None, groups=None, scoring=None, cv=None,
     scores = parallel(delayed(_fit_and_score)(clone(estimator), X, y, scorer,
                                               train, test, verbose, None,
                                               fit_params)
-                      for train, test in cv_iter)
+                      for train, test in cv.split(X, y, groups))
     return np.array(scores)[:, 0]
 
 
@@ -385,7 +384,6 @@ def cross_val_predict(estimator, X, y=None, groups=None, cv=None, n_jobs=1,
     X, y, groups = indexable(X, y, groups)
 
     cv = check_cv(cv, y, classifier=is_classifier(estimator))
-    cv_iter = list(cv.split(X, y, groups))
 
     # Ensure the estimator has implemented the passed decision function
     if not callable(getattr(estimator, method)):
@@ -398,7 +396,7 @@ def cross_val_predict(estimator, X, y=None, groups=None, cv=None, n_jobs=1,
                         pre_dispatch=pre_dispatch)
     prediction_blocks = parallel(delayed(_fit_and_predict)(
         clone(estimator), X, y, train, test, verbose, fit_params, method)
-        for train, test in cv_iter)
+        for train, test in cv.split(X, y, groups))
 
     # Concatenate the predictions
     predictions = [pred_block_i for pred_block_i, _ in prediction_blocks]
@@ -701,6 +699,11 @@ def learning_curve(estimator, X, y, groups=None,
         Refer :ref:`User Guide <cross_validation>` for the various
         cross-validation strategies that can be used here.
 
+        NOTE : One time cv-splitters are not permitted as multiple iterations
+        are done. You can materialize the one time cv-splitter and wrap it
+        into a multi-entrant cv-splitter which gives consistent splits for
+        successive calls to ``split``.
+
     scoring : string, callable or None, optional, default: None
         A string (see model evaluation documentation) or
         a scorer callable object / function with signature
@@ -752,11 +755,9 @@ def learning_curve(estimator, X, y, groups=None,
     X, y, groups = indexable(X, y, groups)
 
     cv = check_cv(cv, y, classifier=is_classifier(estimator))
-    # Make a list since we will be iterating multiple times over the folds
-    cv_iter = list(cv.split(X, y, groups))
     scorer = check_scoring(estimator, scoring=scoring)
 
-    n_max_training_samples = len(cv_iter[0][0])
+    n_max_training_samples = len(next(cv.split(X, y, groups))[0])
     # Because the lengths of folds can be significantly different, it is
     # not guaranteed that we use all of the available training data when we
     # use the first 'n_max_training_samples' samples.
@@ -771,16 +772,17 @@ def learning_curve(estimator, X, y, groups=None,
 
     if shuffle:
         rng = check_random_state(random_state)
-        cv_iter = ((rng.permutation(train), test) for train, test in cv_iter)
+        cv_iter = ((rng.permutation(train), test)
+                   for train, test in cv.split(X, y, groups))
 
     if exploit_incremental_learning:
         classes = np.unique(y) if is_classifier(estimator) else None
         out = parallel(delayed(_incremental_fit_estimator)(
             clone(estimator), X, y, classes, train, test, train_sizes_abs,
-            scorer, verbose) for train, test in cv_iter)
+            scorer, verbose) for train, test in cv.split(X, y, groups))
     else:
         train_test_proportions = []
-        for train, test in cv_iter:
+        for train, test in cv.split(X, y, groups):
             for n_train_samples in train_sizes_abs:
                 train_test_proportions.append((train[:n_train_samples], test))
 
@@ -961,8 +963,6 @@ def validation_curve(estimator, X, y, param_name, param_range, groups=None,
     X, y, groups = indexable(X, y, groups)
 
     cv = check_cv(cv, y, classifier=is_classifier(estimator))
-    cv_iter = list(cv.split(X, y, groups))
-
     scorer = check_scoring(estimator, scoring=scoring)
 
     parallel = Parallel(n_jobs=n_jobs, pre_dispatch=pre_dispatch,
@@ -970,7 +970,8 @@ def validation_curve(estimator, X, y, param_name, param_range, groups=None,
     out = parallel(delayed(_fit_and_score)(
         estimator, X, y, scorer, train, test, verbose,
         parameters={param_name: v}, fit_params=None, return_train_score=True)
-        for train, test in cv_iter for v in param_range)
+        # NOTE do not change order of iteration to allow one time cv splitters
+        for train, test in cv.split(X, y, groups) for v in param_range)
 
     out = np.asarray(out)
     n_params = len(param_range)
