@@ -27,6 +27,7 @@ import inspect
 import json
 import weakref
 import io
+from contextlib import contextmanager
 
 # Local imports
 from . import hashing
@@ -130,7 +131,18 @@ def _load_output(output_dir, func_name, timestamp=None, metadata=None,
         raise KeyError(
             "Non-existing cache value (may have been cleared).\n"
             "File %s does not exist" % filename)
-    return numpy_pickle.load(filename, mmap_mode=mmap_mode)
+
+    args_hash = output_dir.split(os.path.sep)[-1]
+    if _is_write_locked(output_dir):
+        print("hash(%s): Unable to use the cache. Being written" %
+              (args_hash))
+        raise WriteLockError()
+
+    t0 = time.time()
+    out = numpy_pickle.load(filename, mmap_mode=mmap_mode)
+    if verbose > 2:
+        print("hash(%s): Loaded in %s" % (args_hash, time.time() - t0))
+    return out
 
 
 # An in-memory store to avoid looking at the disk-based function
@@ -299,6 +311,45 @@ class NotMemorizedFunc(object):
         pass
 
 
+
+
+class CacheError(RuntimeError):
+    """Generic cache error"""
+
+
+class WriteLockError(CacheError):
+    """To be used when write lock cannot be acquired or is corrupt"""
+
+
+@contextmanager
+def _acquire_write_lock(lock_dir, warn=True, mkdir=True):
+    """A primitive lock to avoid race condition in parallel executions"""
+    lock_file_path = os.path.join(lock_dir, 'joblib.lock')
+    if os.path.exists(lock_file_path):
+        if warn:
+            warnings.warn("A lock file for the current function exists at %s."
+                          " This could happen if there is an attempt at "
+                          "caching the same function in a different process."
+                          " If you think this is an error, delete the lock "
+                          "file manually and try again." % lock_file_path,
+                          stacklevel=2)
+        raise WriteLockError()  # should be caught by the calling function
+    else:
+        if mkdir:
+            mkdirp(lock_dir)
+        open(lock_file_path, 'w').close()  # create a lock file and close
+        try:
+            yield  # This executes the code within the "with block"
+        except:
+            raise  # raise the original error. Let the calling code handle it
+        finally:
+            os.remove(lock_file_path)
+
+
+def _is_write_locked(lock_dir):
+    return os.path.exists(os.path.join(lock_dir, 'joblib.lock'))
+
+
 ###############################################################################
 # class `MemorizedFunc`
 ###############################################################################
@@ -341,7 +392,7 @@ class MemorizedFunc(Logger):
     #-------------------------------------------------------------------------
 
     def __init__(self, func, cachedir, ignore=None, mmap_mode=None,
-                 compress=False, verbose=1, timestamp=None):
+                 compress=False, verbose=1, timestamp=None, store_args=False):
         """
             Parameters
             ----------
@@ -366,6 +417,8 @@ class MemorizedFunc(Logger):
             timestamp: float, optional
                 The reference time from which times in tracing messages
                 are reported.
+            store_args : bool, optional. Default False
+                Whether to store the input args. Can be set to True if needed.
         """
         Logger.__init__(self)
         self.mmap_mode = mmap_mode
@@ -374,8 +427,8 @@ class MemorizedFunc(Logger):
             ignore = []
         self.ignore = ignore
 
-        self._verbose = verbose
         self.cachedir = cachedir
+        self._verbose = verbose
         self.compress = compress
         if compress and self.mmap_mode is not None:
             warnings.warn('Compressed results cannot be memmapped',
@@ -383,7 +436,9 @@ class MemorizedFunc(Logger):
         if timestamp is None:
             timestamp = time.time()
         self.timestamp = timestamp
+
         mkdirp(self.cachedir)
+
         try:
             functools.update_wrapper(self, func)
         except:
@@ -398,6 +453,7 @@ class MemorizedFunc(Logger):
             # Pydoc does a poor job on other objects
             doc = func.__doc__
         self.__doc__ = 'Memoized version of %s' % doc
+        self.store_args = store_args
 
     def _cached_call(self, args, kwargs):
         """Call wrapped function and cache result, or read cache if available.
@@ -420,42 +476,79 @@ class MemorizedFunc(Logger):
         output_dir, argument_hash = self._get_output_dir(*args, **kwargs)
         metadata = None
         # FIXME: The statements below should be try/excepted
-        if not (self._check_previous_func_code(stacklevel=4) and
-                                 os.path.exists(output_dir)):
+        try:
+            if not (self._check_previous_func_code(stacklevel=4) and
+                    os.path.exists(output_dir)):
+                raise CacheError()
+            if _is_write_locked(output_dir):
+                raise WriteLockError()
+
+            # Cache exists and there is no unclosed write lock
+            # XXX Do we need a write lock while reading to disallow editing
+            # this cache? Or would that slow things down by not allowing
+            # parallel read?
+            t0 = time.time()
+            out = _load_output(output_dir, _get_func_fullname(self.func),
+                               timestamp=self.timestamp,
+                               metadata=metadata, mmap_mode=self.mmap_mode,
+                               verbose=self._verbose)
+            if self._verbose > 4:
+                t = time.time() - t0
+                _, name = get_func_name(self.func)
+                msg = '%s cache loaded - %s' % (name, format_time(t))
+                print(max(0, (80 - len(msg))) * '_' + msg)
+
+        except CacheError:  # Function or data changed / No cache exists
             if self._verbose > 10:
                 _, name = get_func_name(self.func)
                 self.warn('Computing func %s, argument hash %s in '
                           'directory %s'
                         % (name, argument_hash, output_dir))
+            # This will try and skip persisting the results, if impossible
+            # (If write lock acquired by another thread between the
+            #  previous check and the check inside self.call)
             out, metadata = self.call(*args, **kwargs)
             if self.mmap_mode is not None:
                 # Memmap the output at the first call to be consistent with
                 # later calls
-                out = _load_output(output_dir, _get_func_fullname(self.func),
+                out = _load_output(output_dir,
+                                   _get_func_fullname(self.func),
                                    timestamp=self.timestamp,
                                    mmap_mode=self.mmap_mode,
                                    verbose=self._verbose)
-        else:
-            try:
-                t0 = time.time()
-                out = _load_output(output_dir, _get_func_fullname(self.func),
-                                   timestamp=self.timestamp,
-                                   metadata=metadata, mmap_mode=self.mmap_mode,
-                                   verbose=self._verbose)
-                if self._verbose > 4:
-                    t = time.time() - t0
-                    _, name = get_func_name(self.func)
-                    msg = '%s cache loaded - %s' % (name, format_time(t))
-                    print(max(0, (80 - len(msg))) * '_' + msg)
-            except Exception:
-                # XXX: Should use an exception logger
-                self.warn('Exception while loading results for '
-                          '(args=%s, kwargs=%s)\n %s' %
-                          (args, kwargs, traceback.format_exc()))
 
+        except WriteLockError:
+            # If there is another thread writing to the cache or any other
+            # exception, skip persiting the results
+            if self.verbose > 2:
+                _, name = get_func_name(self.func)
+                print("%s cache lock active; Not reading from cache" % name)
+            if self._verbose > 0:
+                print(format_call(self.func, args, kwargs))
+            start = time.time()
+            output, metadata = self.func(*args, **kwargs), None
+            print("Function call time - %s" % format_time(time.time() - start))
+
+        except Exception as e:  # any other exception
+            # XXX: Should use an exception logger
+            _, func_name = get_func_name(self.func)
+            args_kwargs = 'args=%s, kwargs=%s' % (args, kwargs)
+            if len(args_kwargs) > 100:
+                # Truncate huge args_kwargs list
+                args_kwargs = args_kwargs[:100] + '...'
+            self.warn('Exception while loading results for '
+                      '%s (%s)\n %s' %
+                      (func_name, args_kwargs, traceback.format_exc()))
+
+            # Remove the output directory and try again
+            if not _is_write_locked(output_dir):
                 shutil.rmtree(output_dir, ignore_errors=True)
-                out, metadata = self.call(*args, **kwargs)
-                argument_hash = None
+
+            # This will try and skip persisting the results, if impossible
+            # (If write lock acquired by another thread between the
+            #  previous check and the check inside self.call)
+            out, metadata = self.call(*args, **kwargs)
+            argument_hash = None
         return (out, argument_hash, metadata)
 
     def call_and_shelve(self, *args, **kwargs):
@@ -592,19 +685,24 @@ class MemorizedFunc(Logger):
         func_code_file = os.path.join(func_dir, 'func_code.py')
 
         try:
+            # Don't attempt to access when the file is incomplete
+            if _is_write_locked(func_dir):
+                return False  # And return False, so it will re-compute
             with io.open(func_code_file, encoding="UTF-8") as infile:
                 old_func_code, old_first_line = \
                             extract_first_line(infile.read())
+            if old_func_code == func_code:
+                return True
         except IOError:
+            # XXX Should we manage exceptions here?
+            # Mark as in-progress so other threads don't read
+            with _acquire_write_lock(func_dir):
                 self._write_func_code(func_code_file, func_code, first_line)
-                return False
-        if old_func_code == func_code:
-            return True
+            return False
 
         # We have differing code, is this because we are referring to
         # different functions, or because the function we are referring to has
         # changed?
-
         _, func_name = get_func_name(self.func, resolv_alias=False,
                                      win_characters=False)
         if old_first_line == first_line == -1 or func_name == '<lambda>':
@@ -662,25 +760,52 @@ class MemorizedFunc(Logger):
         mkdirp(func_dir)
         func_code, _, first_line = get_func_code(self.func)
         func_code_file = os.path.join(func_dir, 'func_code.py')
-        self._write_func_code(func_code_file, func_code, first_line)
+
 
     def call(self, *args, **kwargs):
         """ Force the execution of the function with the given arguments and
             persist the output values.
         """
         start_time = time.time()
-        output_dir, _ = self._get_output_dir(*args, **kwargs)
-        if self._verbose > 0:
-            print(format_call(self.func, args, kwargs))
-        output = self.func(*args, **kwargs)
-        self._persist_output(output, output_dir)
-        duration = time.time() - start_time
-        metadata = self._persist_input(output_dir, duration, args, kwargs)
+
+        t0 = time.time()
+        output_dir, args_hash = self._get_output_dir(*args, **kwargs)
+        if self._verbose > 2:
+            print("hash(%s): Argument hash time - %s"
+                  % (args_hash, time.time() - t0))
 
         if self._verbose > 0:
-            _, name = get_func_name(self.func)
-            msg = '%s - %s' % (name, format_time(duration))
-            print(max(0, (80 - len(msg))) * '_' + msg)
+            print(format_call(self.func, args, kwargs))
+
+        t0 = time.time()
+        output, metadata = self.func(*args, **kwargs), None
+        if self._verbose > 2:
+            print("hash(%s): Function call time - %s"
+                  % (args_hash, time.time() - t0))
+
+        try:
+            t0 = time.time()
+            with _acquire_write_lock(output_dir):
+                self._persist_output(output, output_dir)
+                if self._verbose > 2:
+                    print("hash(%s): Persist output time - %s"
+                          % (args_hash, time.time() - t0))
+
+                duration = time.time() - start_time
+                t0 = time.time()
+                metadata = self._persist_input(output_dir, duration, args,
+                                               kwargs, args_hash)
+                if self._verbose > 2:
+                    print("hash(%s): Persist input time - %s"
+                          % (args_hash, time.time() - t0))
+
+            if self._verbose > 0:
+                _, name = get_func_name(self.func)
+                msg = '%s - %s' % (name, format_time(duration))
+                print(max(0, (80 - len(msg))) * '_' + msg)
+        except WriteLockError:
+            # Another thread is writing to it
+            pass
         return output, metadata
 
     # Make public
@@ -696,7 +821,7 @@ class MemorizedFunc(Logger):
         except OSError:
             " Race condition in the creation of the directory "
 
-    def _persist_input(self, output_dir, duration, args, kwargs,
+    def _persist_input(self, output_dir, duration, args, kwargs, args_hash,
                        this_duration_limit=0.5):
         """ Save a small summary of the call using json format in the
             output directory.
@@ -721,7 +846,10 @@ class MemorizedFunc(Logger):
         input_repr = dict((k, repr(v)) for k, v in argument_dict.items())
         # This can fail due to race-conditions with multiple
         # concurrent joblibs removing the file or the directory
-        metadata = {"duration": duration, "input_args": input_repr}
+        metadata = {"duration": duration,
+                    "input_args_hash": args_hash}
+        if self.store_args:
+            metadata["input_args"] = input_repr
         try:
             mkdirp(output_dir)
             with open(os.path.join(output_dir, 'metadata.json'), 'w') as f:
