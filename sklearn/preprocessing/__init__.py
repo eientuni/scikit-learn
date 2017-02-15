@@ -22,6 +22,7 @@ from .data import minmax_scale
 from .data import OneHotEncoder
 from .data import boxcox
 from .data import BoxCoxTransformer
+from .data import QuantileNormalizer
 from .data import PolynomialFeatures
 
 from .label import label_binarize
@@ -42,6 +43,7 @@ __all__ = [
     'MultiLabelBinarizer',
     'MinMaxScaler',
     'MaxAbsScaler',
+    'QuantileNormalizer',
     'Normalizer',
     'OneHotEncoder',
     'RobustScaler',
