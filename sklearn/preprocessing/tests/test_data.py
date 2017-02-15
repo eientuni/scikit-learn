@@ -5,6 +5,7 @@
 # License: BSD 3 clause
 
 import warnings
+import pickle
 import numpy as np
 import numpy.linalg as la
 import scipy.stats as stats
@@ -1695,6 +1696,7 @@ def test_fit_cold_start():
         scaler.fit_transform(X_2d)
 
 
+<<<<<<< e35903a76c507cbeba7ae9a0789bcb6535723133
 def test_boxcox_transform():
     # Apply boxcox transform and check if it is
     # applying individually on each feature
@@ -1747,3 +1749,14 @@ def test_boxcox_transformer():
     assert_true(np.min(X_tr[:, 0]) < 0.)
     assert_true(np.min(X_tr[:, 1]) < 0.)
     assert_array_almost_equal(X_or, X, 10)
+
+
+def test_quantile_normalizer_pickling():
+    iris = datasets.load_iris()
+    qn = QuantileNormalizer()
+    qn.fit(iris.data)
+
+    qn_ser = pickle.dumps(qn, pickle.HIGHEST_PROTOCOL)
+    qn2 = pickle.loads(qn_ser)
+    assert_array_almost_equal(qn.transform(iris.data),
+                              qn2.transform(iris.data))
