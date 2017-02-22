@@ -1920,7 +1920,6 @@ class OneHotEncoder(BaseEstimator, TransformerMixin):
                                    self.categorical_features, copy=True)
 
 
-<<<<<<< 0e9ac074e8307ac0aa2f0e625a16dd07a6817130
 def _boxcox(X, i, lambda_x=None):
     x = X[:, i]
     if lambda_x is None:
