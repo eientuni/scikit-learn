@@ -40,7 +40,7 @@ class GaussianProcessRegressor(BaseEstimator, RegressorMixin):
 
     Parameters
     ----------
-    kernel : kernel object
+    kernel: kernel object
         The kernel specifying the covariance function of the GP. If None is
         passed, the kernel "1.0 * RBF(1.0)" is used as default. Note that
         the kernel's hyperparameters are optimized during fitting.
